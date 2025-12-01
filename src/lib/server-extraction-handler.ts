@@ -18,13 +18,6 @@ export async function simulateServerExtraction(
   }
 
   try {
-    const workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url
-    ).toString()
-    
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
-
     const loadingTask = pdfjsLib.getDocument({
       data: arrayBuffer,
       useWorkerFetch: false,

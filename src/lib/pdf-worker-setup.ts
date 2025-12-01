@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist'
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 let workerInitialized = false
 let workerInitError: Error | null = null
@@ -13,12 +14,7 @@ export async function initializePDFWorker(): Promise<{ success: boolean; error?:
   }
 
   try {
-    const workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url
-    ).toString()
-
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
     const testData = new Uint8Array([
       0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x25, 0xe2, 0xe3,
