@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist'
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 let workerInitialized = false
 let workerInitError: Error | null = null
@@ -14,17 +15,9 @@ export async function initializePDFWorker(): Promise<{ success: boolean; error?:
   }
 
   try {
-    let workerUrl: string
-    try {
-      const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
-      workerUrl = workerModule.default
-    } catch (importError) {
-      console.warn('Failed to import worker via Vite ?url, trying legacy path:', importError)
-      workerUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href
-    }
-
     pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
     console.log('PDF.js worker URL set to:', workerUrl)
+    console.log('Worker mode: attempting with bundled worker')
 
     const testData = new Uint8Array([
       0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x25, 0xe2, 0xe3,

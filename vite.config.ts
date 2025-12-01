@@ -24,6 +24,20 @@ export default defineConfig({
     exclude: ['pdfjs-dist']
   },
   worker: {
-    format: 'es'
+    format: 'es',
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name].js',
+      }
+    }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'pdfjs': ['pdfjs-dist'],
+        }
+      }
+    }
   }
 });

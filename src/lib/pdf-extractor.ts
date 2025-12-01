@@ -131,13 +131,9 @@ async function tryLoadPDFWithFallbacks(
     duration: 0
   })
   
-  if (!workerInit.success) {
-    throw workerInit.error || new Error('Worker initialization failed')
-  }
-  
   const attempts: { method: string; config: any }[] = [
     {
-      method: 'standard_load',
+      method: 'standard_load_with_worker',
       config: {
         data: arrayBuffer,
         useWorkerFetch: false,
@@ -146,7 +142,7 @@ async function tryLoadPDFWithFallbacks(
       }
     },
     {
-      method: 'load_with_recovery',
+      method: 'load_with_recovery_worker',
       config: {
         data: arrayBuffer,
         useWorkerFetch: false,
@@ -157,7 +153,7 @@ async function tryLoadPDFWithFallbacks(
       }
     },
     {
-      method: 'load_ignore_errors',
+      method: 'load_ignore_errors_worker',
       config: {
         data: arrayBuffer,
         useWorkerFetch: false,
@@ -169,13 +165,36 @@ async function tryLoadPDFWithFallbacks(
       }
     },
     {
-      method: 'load_minimal',
+      method: 'standard_load_no_worker',
+      config: {
+        data: arrayBuffer,
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
+        disableWorker: true,
+      }
+    },
+    {
+      method: 'load_with_recovery_no_worker',
+      config: {
+        data: arrayBuffer,
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
+        stopAtErrors: false,
+        disableFontFace: true,
+        disableWorker: true,
+      }
+    },
+    {
+      method: 'load_minimal_no_worker',
       config: {
         data: new Uint8Array(arrayBuffer),
         useWorkerFetch: false,
         isEvalSupported: false,
         disableFontFace: true,
         stopAtErrors: false,
+        disableWorker: true,
       }
     }
   ]
@@ -187,15 +206,20 @@ async function tryLoadPDFWithFallbacks(
     try {
       const pdf = await pdfjsLib.getDocument(attempt.config).promise
       
+      const isNoWorker = attempt.method.includes('no_worker')
       diagnostic.attempts.push({
         method: attempt.method,
         success: true,
-        details: { pages: pdf.numPages, workerMode: workerInit.mode },
+        details: { 
+          pages: pdf.numPages, 
+          workerMode: isNoWorker ? 'no-worker' : workerInit.mode,
+          disableWorker: isNoWorker 
+        },
         timestamp: attemptStart,
         duration: Date.now() - attemptStart
       })
       
-      diagnostic.autoRepairUsed = attempt.method !== 'standard_load' ? attempt.method : undefined
+      diagnostic.autoRepairUsed = attempt.method !== 'standard_load_with_worker' ? attempt.method : undefined
       
       return pdf
     } catch (error: any) {
@@ -309,11 +333,11 @@ function findEOFMarker(bytes: Uint8Array): boolean {
 function generateRecommendations(diagnostic: DiagnosticInfo): string[] {
   const recommendations: string[] = []
   
-  if (diagnostic.errorCode === 'WORKER_LOAD_ERROR' || diagnostic.errorCode === 'ALL_METHODS_FAILED') {
-    recommendations.push('PDF.js gagal memuat - periksa apakah browser Anda mendukung Web Workers')
-    recommendations.push('Coba refresh halaman dan upload ulang file PDF')
+  if (diagnostic.errorCode === 'ALL_METHODS_FAILED') {
     recommendations.push('Buka PDF di Adobe Reader dan Save As dengan nama baru')
-    recommendations.push('Gunakan browser yang berbeda (Chrome, Firefox, Edge terbaru)')
+    recommendations.push('Gunakan "Print to PDF" untuk membuat salinan bersih')
+    recommendations.push('Coba refresh halaman dan upload ulang file PDF')
+    recommendations.push('Coba export ulang dari aplikasi sumber dengan PDF 1.4 compatibility')
     return recommendations
   }
   
@@ -492,83 +516,7 @@ async function rasterizePages(
   return images
 }
 
-async function extractViaServer(
-  file: File,
-  diagnostic: DiagnosticInfo,
-  onProgress?: (progress: number, status: string) => void
-): Promise<ExtractionResult> {
-  const attemptStart = Date.now()
-  
-  try {
-    onProgress?.(10, 'Uploading to server for processing...')
-    
-    const formData = new FormData()
-    formData.append('pdf', file, file.name)
-    formData.append('sessionId', diagnostic.sessionId)
-    
-    const response = await fetch('/api/extract-images', {
-      method: 'POST',
-      body: formData,
-    })
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Server extraction failed: ${response.status} ${errorText}`)
-    }
-    
-    onProgress?.(50, 'Processing on server...')
-    
-    const result: ServerExtractionResponse = await response.json()
-    
-    if (!result.success || !result.images || result.images.length === 0) {
-      throw new Error(result.error || 'Server extraction returned no images')
-    }
-    
-    onProgress?.(80, 'Converting server response...')
-    
-    const images: ExtractedImage[] = result.images.map((img, index) => ({
-      id: `${file.name}-server-${index}-${Date.now()}`,
-      dataUrl: img.data.startsWith('data:') ? img.data : `data:image/${img.format.toLowerCase()};base64,${img.data}`,
-      pageNumber: img.pageNumber,
-      width: img.width,
-      height: img.height,
-      format: img.format.toUpperCase(),
-      filename: `${file.name.replace('.pdf', '')}_page-${img.pageNumber}.${img.format.toLowerCase()}`,
-    }))
-    
-    diagnostic.attempts.push({
-      method: 'server_extraction',
-      success: true,
-      imageCount: images.length,
-      timestamp: attemptStart,
-      duration: Date.now() - attemptStart
-    })
-    
-    onProgress?.(100, 'Server extraction complete!')
-    
-    return {
-      images,
-      totalPages: result.diagnostic?.pageCount || images.length,
-      pdfName: file.name,
-      diagnostic: {
-        ...diagnostic,
-        ...result.diagnostic,
-        attempts: [...diagnostic.attempts, ...(result.diagnostic?.attempts || [])]
-      }
-    }
-  } catch (error: any) {
-    diagnostic.attempts.push({
-      method: 'server_extraction',
-      success: false,
-      error: error.message,
-      errorStack: error.stack,
-      timestamp: attemptStart,
-      duration: Date.now() - attemptStart
-    })
-    
-    throw error
-  }
-}
+
 
 export async function extractImagesFromPDF(
   file: File,
@@ -616,7 +564,6 @@ export async function extractImagesFromPDF(
 
     let arrayBuffer: ArrayBuffer
     let pdf: pdfjsLib.PDFDocumentProxy | null = null
-    let workerLoadFailed = false
     
     try {
       onProgress?.(10, 'Loading PDF document...')
@@ -679,10 +626,6 @@ export async function extractImagesFromPDF(
         onProgress?.(25, 'Loading PDF with enhanced compatibility...')
         pdf = await tryLoadPDFWithFallbacks(arrayBuffer, diagnostic)
       } catch (loadError: any) {
-        workerLoadFailed = loadError.message?.includes('worker') || 
-                          loadError.message?.includes('Worker') ||
-                          loadError.message?.includes('fetch')
-        
         if (loadError.message?.includes('password') || loadError.message?.includes('encrypted')) {
           diagnostic.errorCode = 'PDF_ENCRYPTED'
           diagnostic.errorMessage = 'PDF is password protected'
