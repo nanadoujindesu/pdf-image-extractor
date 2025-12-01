@@ -1,14 +1,12 @@
 import * as pdfjsLib from 'pdfjs-dist'
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 let workerInitialized = false
 let workerInitError: Error | null = null
 let workerMode: 'worker' | 'no-worker' = 'no-worker'
 
-const PDFJS_VERSION = '5.4.449'
-const WORKER_SRC = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`
-
 if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_SRC
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 }
 
 export async function initializePDFWorker(): Promise<{ success: boolean; error?: Error; mode: 'worker' | 'no-worker' }> {
@@ -21,9 +19,9 @@ export async function initializePDFWorker(): Promise<{ success: boolean; error?:
   }
 
   try {
-    console.log('PDF.js: Initializing worker from CDN')
+    console.log('PDF.js: Initializing worker from local build')
     
-    pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_SRC
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
     const testData = new Uint8Array([
       0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x25, 0xe2, 0xe3,
@@ -66,7 +64,7 @@ export async function initializePDFWorker(): Promise<{ success: boolean; error?:
 
     workerInitialized = true
     workerMode = 'worker'
-    console.log('PDF.js initialized successfully with CDN worker')
+    console.log('PDF.js initialized successfully with local worker')
     return { success: true, mode: 'worker' }
   } catch (error) {
     workerInitError = error instanceof Error ? error : new Error('Unknown worker initialization error')
