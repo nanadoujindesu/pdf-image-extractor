@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useKV } from '@github/spark/hooks'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Toaster, toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -15,7 +14,7 @@ type ViewState = 'hero' | 'upload' | 'processing' | 'results'
 
 function App() {
   const [view, setView] = useState<ViewState>('hero')
-  const [extractionResult, setExtractionResult] = useKV<ExtractionResult | null>('extraction-result', null)
+  const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null)
   const [progress, setProgress] = useState(0)
   const [status, setStatus] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
