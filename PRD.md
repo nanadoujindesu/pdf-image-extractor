@@ -23,19 +23,22 @@ A modern, client-side PDF image extraction tool that allows users to upload PDFs
 - **Functionality**: Extract embedded images from PDF using pdf.js with local worker bundling, with multiple fallback strategies including automatic server-side processing, auto-repair mechanisms, and comprehensive error handling
 - **Purpose**: Core functionality that retrieves all visual content from the uploaded PDF with robust diagnostics, automatic recovery from common PDF issues, and seamless fallback when client-side processing fails
 - **Trigger**: User uploads valid PDF file
-- **Progression**: Initialize local PDF.js worker (no CDN dependency) → PDF loaded → Compute file fingerprint (SHA-256) & extract PDF version → Validate file header → Auto-repair if needed (header/EOF fixes) → Try multiple PDF loading strategies (standard → recovery mode → minimal mode) → If worker fails to load, automatically fall back to server-side extraction → Extract embedded images → If count = 0, rasterize pages at high DPI → If errors occur, collect comprehensive diagnostic data (attempts, durations, stack traces, recommendations) → Display results or friendly error with actionable advice and "Process on Server" button
-- **Success criteria**: All images successfully extracted with correct metadata, or pages rasterized as fallback, within reasonable time (<10s for typical PDFs); errors provide actionable feedback with diagnostic downloads; valid PDFs that open in Adobe Reader successfully process without false positives; worker loading failures automatically trigger server-side fallback without user intervention
+- **Progression**: Initialize local PDF.js worker (bundled, no CDN) → Test worker with minimal PDF → PDF loaded → Compute file fingerprint (SHA-256) & extract PDF version → Validate file header → Auto-repair if needed (header/EOF fixes) → Try multiple PDF loading strategies (standard → recovery mode → minimal mode) → **If worker fails to initialize or load, automatically POST to /api/extract-images** → If server endpoint unavailable (404), fall back to client-side server simulation → Extract embedded images → If count = 0, rasterize pages at high DPI → If errors occur, collect comprehensive diagnostic data (attempts, durations, stack traces, recommendations) → Display results or friendly error with actionable advice and "Process on Server" button
+- **Success criteria**: All images successfully extracted with correct metadata, or pages rasterized as fallback, within reasonable time (<10s for typical PDFs); errors provide actionable feedback with diagnostic downloads; valid PDFs that open in Adobe Reader successfully process without false positives; worker loading failures automatically trigger server-side fallback without user intervention; ALL_METHODS_FAILED only occurs when both client AND server extraction fail
 - **Robustness Features**:
-  - Local PDF.js worker bundling (no external CDN dependency)
-  - Automatic server-side fallback when worker loading fails
-  - Multiple PDF loading strategies with automatic fallback
-  - Automatic header and EOF marker repair for corrupted files
-  - File fingerprinting (SHA-256) for diagnostic tracking
-  - PDF version detection and compatibility recommendations
-  - Detailed attempt logging with timestamps and durations
-  - Stack trace capture for debugging
-  - Context-aware error recommendations based on failure patterns
-  - Manual "Process on Server" option for failed extractions
+  - ✅ Local PDF.js worker bundling via Vite (no external CDN dependency)
+  - ✅ Worker health check with minimal test PDF on initialization
+  - ✅ Automatic server-side fallback when worker loading fails
+  - ✅ Client-side "server simulation" fallback when /api/extract-images returns 404
+  - ✅ Multiple PDF loading strategies with automatic fallback
+  - ✅ Automatic header and EOF marker repair for corrupted files
+  - ✅ File fingerprinting (SHA-256) for diagnostic tracking
+  - ✅ PDF version detection and compatibility recommendations
+  - ✅ Detailed attempt logging with timestamps and durations
+  - ✅ Stack trace capture for debugging
+  - ✅ Context-aware error recommendations based on failure patterns
+  - ✅ Manual "Process on Server" option in error UI for failed extractions
+  - ⚠️ Server endpoint /api/extract-images placeholder (requires Python/Node backend - see SERVER_IMPLEMENTATION_GUIDE.md)
 
 ### Results Gallery
 - **Functionality**: Display all extracted images in a responsive masonry grid with metadata

@@ -1,25 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist'
-
-let workerInitialized = false
-let workerError: Error | null = null
-
-async function initializePDFWorker() {
-  if (workerInitialized) return
-  
-  try {
-    const workerUrl = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url
-    ).href
-    
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
-    workerInitialized = true
-  } catch (error) {
-    workerError = error instanceof Error ? error : new Error('Failed to initialize PDF worker')
-    console.error('PDF worker initialization failed:', error)
-    throw workerError
-  }
-}
+import { initializePDFWorker } from './pdf-worker-setup'
 
 export interface ExtractedImage {
   id: string
@@ -140,7 +120,10 @@ async function tryLoadPDFWithFallbacks(
   arrayBuffer: ArrayBuffer,
   diagnostic: DiagnosticInfo
 ): Promise<pdfjsLib.PDFDocumentProxy> {
-  await initializePDFWorker()
+  const workerInit = await initializePDFWorker()
+  if (!workerInit.success) {
+    throw workerInit.error || new Error('Worker initialization failed')
+  }
   
   const attempts: { method: string; config: any }[] = [
     {
