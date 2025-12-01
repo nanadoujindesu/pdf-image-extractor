@@ -16,7 +16,7 @@ export async function initializePDFWorker(): Promise<{ success: boolean; error?:
   try {
     console.log('PDF.js: Initializing in no-worker mode (main thread)')
     
-    pdfjsLib.GlobalWorkerOptions.workerSrc = ''
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'data:text/javascript;base64,Cg=='
 
     const testData = new Uint8Array([
       0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x25, 0xe2, 0xe3,
