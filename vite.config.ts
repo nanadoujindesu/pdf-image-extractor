@@ -27,9 +27,11 @@ function copyPdfWorker() {
           mkdirSync(assetsDir, { recursive: true })
         }
         
-        if (existsSync(workerSrc)) {
+        if (existsSync(workerSrc) && !existsSync(workerDest)) {
           copyFileSync(workerSrc, workerDest)
           console.log('✓ Copied pdf.worker.min.js to public/assets/')
+        } else if (existsSync(workerDest)) {
+          console.log('✓ pdf.worker.min.js already exists in public/assets/')
         } else {
           console.warn('⚠ PDF.js worker not found at', workerSrc)
         }
@@ -61,11 +63,12 @@ export default defineConfig({
     format: 'es',
     rollupOptions: {
       output: {
-        entryFileNames: 'assets/[name].js',
+        entryFileNames: 'assets/[name]-[hash].js',
       }
     }
   },
   build: {
+    chunkSizeWarningLimit: 3000,
     rollupOptions: {
       output: {
         manualChunks: {

@@ -75,6 +75,9 @@ export class PDFExtractionError extends Error {
 const MAX_FILE_SIZE = 200 * 1024 * 1024
 const MAX_PAGES = 1000
 const MAX_MEMORY_PER_IMAGE = 50 * 1024 * 1024
+const BATCH_SIZE = 10
+const JPEG_QUALITY = 0.85
+const MAX_IMAGE_DIMENSION = 4096
 
 function generateSessionId(): string {
   return `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -382,63 +385,62 @@ async function extractEmbeddedImages(
       }
 
       if (hasImages) {
-        const scale = 2
-        const viewport = page.getViewport({ scale })
+        const baseScale = 2
+        let viewport = page.getViewport({ scale: baseScale })
         
-        if (viewport.width * viewport.height * 4 > MAX_MEMORY_PER_IMAGE) {
-          console.warn(`Page ${pageNum} too large, using lower resolution`)
-          const adjustedScale = Math.sqrt(MAX_MEMORY_PER_IMAGE / (viewport.width * viewport.height * 4))
-          const newViewport = page.getViewport({ scale: adjustedScale })
-          const canvas = document.createElement('canvas')
-          const context = canvas.getContext('2d', { willReadFrequently: false })!
-          
-          canvas.width = newViewport.width
-          canvas.height = newViewport.height
-          
-          await page.render({
-            canvasContext: context,
-            viewport: newViewport,
-          } as any).promise
-          
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
-          
-          images.push({
-            id: `${file.name}-page-${pageNum}-${Date.now()}`,
-            dataUrl,
-            pageNumber: pageNum,
-            width: Math.round(newViewport.width),
-            height: Math.round(newViewport.height),
-            format: 'JPEG',
-            filename: `${file.name.replace('.pdf', '')}_page-${pageNum}.jpg`,
-          })
-        } else {
-          const canvas = document.createElement('canvas')
-          const context = canvas.getContext('2d', { willReadFrequently: false })!
-          
-          canvas.width = viewport.width
-          canvas.height = viewport.height
-          
-          await page.render({
-            canvasContext: context,
-            viewport: viewport,
-          } as any).promise
-          
-          const dataUrl = canvas.toDataURL('image/png')
-          
-          images.push({
-            id: `${file.name}-page-${pageNum}-${Date.now()}`,
-            dataUrl,
-            pageNumber: pageNum,
-            width: Math.round(viewport.width),
-            height: Math.round(viewport.height),
-            format: 'PNG',
-            filename: `${file.name.replace('.pdf', '')}_page-${pageNum}.png`,
-          })
+        let finalScale = baseScale
+        if (viewport.width > MAX_IMAGE_DIMENSION || viewport.height > MAX_IMAGE_DIMENSION) {
+          const maxDim = Math.max(viewport.width, viewport.height)
+          finalScale = (MAX_IMAGE_DIMENSION / maxDim) * baseScale
+          viewport = page.getViewport({ scale: finalScale })
         }
+        
+        const estimatedMemory = viewport.width * viewport.height * 4
+        let useFormat: 'png' | 'jpeg' = 'jpeg'
+        let quality = JPEG_QUALITY
+        
+        if (estimatedMemory > MAX_MEMORY_PER_IMAGE) {
+          const adjustedScale = Math.sqrt(MAX_MEMORY_PER_IMAGE / (viewport.width * viewport.height * 4)) * finalScale
+          viewport = page.getViewport({ scale: adjustedScale })
+          quality = 0.8
+        }
+        
+        const canvas = document.createElement('canvas')
+        const context = canvas.getContext('2d', { 
+          willReadFrequently: false,
+          alpha: false
+        })!
+        
+        canvas.width = Math.floor(viewport.width)
+        canvas.height = Math.floor(viewport.height)
+        
+        await page.render({
+          canvasContext: context,
+          viewport: viewport,
+        } as any).promise
+        
+        const dataUrl = canvas.toDataURL(`image/${useFormat}`, quality)
+        
+        images.push({
+          id: `${file.name}-page-${pageNum}-${Date.now()}`,
+          dataUrl,
+          pageNumber: pageNum,
+          width: canvas.width,
+          height: canvas.height,
+          format: useFormat.toUpperCase(),
+          filename: `${file.name.replace('.pdf', '')}_page-${pageNum}.${useFormat}`,
+        })
+        
+        canvas.width = 0
+        canvas.height = 0
       }
       
       const progress = 20 + ((pageNum / totalPages) * 50)
       onProgress?.(progress, `Scanning page ${pageNum}/${totalPages}...`)
+      
+      if (pageNum % BATCH_SIZE === 0) {
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
     } catch (error) {
       console.error(`Error processing page ${pageNum}:`, error)
     }
@@ -463,47 +465,59 @@ async function rasterizePages(
   for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
     try {
       const page = await pdf.getPage(pageNum)
-      const viewport = page.getViewport({ scale })
+      let viewport = page.getViewport({ scale })
       
-      const estimatedMemory = viewport.width * viewport.height * 4
-      let useScale = scale
-      let useFormat: 'png' | 'jpeg' = 'png'
-      let quality = 1.0
-      
-      if (estimatedMemory > MAX_MEMORY_PER_IMAGE) {
-        useScale = Math.sqrt(MAX_MEMORY_PER_IMAGE / (viewport.width * viewport.height * 4)) * scale
-        useFormat = 'jpeg'
-        quality = 0.85
+      if (viewport.width > MAX_IMAGE_DIMENSION || viewport.height > MAX_IMAGE_DIMENSION) {
+        const maxDim = Math.max(viewport.width, viewport.height)
+        const adjustedScale = (MAX_IMAGE_DIMENSION / maxDim) * scale
+        viewport = page.getViewport({ scale: adjustedScale })
       }
       
-      const finalViewport = page.getViewport({ scale: useScale })
-      const canvas = document.createElement('canvas')
-      const context = canvas.getContext('2d', { willReadFrequently: false })!
+      const estimatedMemory = viewport.width * viewport.height * 4
+      let useFormat: 'png' | 'jpeg' = 'jpeg'
+      let quality = JPEG_QUALITY
       
-      canvas.width = finalViewport.width
-      canvas.height = finalViewport.height
+      if (estimatedMemory > MAX_MEMORY_PER_IMAGE) {
+        const adjustedScale = Math.sqrt(MAX_MEMORY_PER_IMAGE / (viewport.width * viewport.height * 4)) * scale
+        viewport = page.getViewport({ scale: adjustedScale })
+        quality = 0.8
+      }
+      
+      const canvas = document.createElement('canvas')
+      const context = canvas.getContext('2d', { 
+        willReadFrequently: false,
+        alpha: false
+      })!
+      
+      canvas.width = Math.floor(viewport.width)
+      canvas.height = Math.floor(viewport.height)
       
       await page.render({
         canvasContext: context,
-        viewport: finalViewport,
+        viewport: viewport,
       } as any).promise
       
-      const dataUrl = useFormat === 'jpeg' 
-        ? canvas.toDataURL('image/jpeg', quality)
-        : canvas.toDataURL('image/png')
+      const dataUrl = canvas.toDataURL(`image/${useFormat}`, quality)
       
       images.push({
         id: `${file.name}-page-${pageNum}-${Date.now()}`,
         dataUrl,
         pageNumber: pageNum,
-        width: Math.round(finalViewport.width),
-        height: Math.round(finalViewport.height),
+        width: canvas.width,
+        height: canvas.height,
         format: useFormat.toUpperCase(),
         filename: `${file.name.replace('.pdf', '')}_page-${pageNum}.${useFormat}`,
       })
       
+      canvas.width = 0
+      canvas.height = 0
+      
       const progress = 75 + ((pageNum / totalPages) * 20)
       onProgress?.(progress, `Rasterizing page ${pageNum}/${totalPages}...`)
+      
+      if (pageNum % BATCH_SIZE === 0) {
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
     } catch (error) {
       console.error(`Error rasterizing page ${pageNum}:`, error)
     }
