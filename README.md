@@ -52,6 +52,83 @@ npm run build
 npm start
 ```
 
+## 🚀 Deployment (Railway/Render/Cloud)
+
+### Required Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `JWT_SECRET` | ✅ **Yes** | Authentication secret (min 32 chars) |
+| `ADMIN_EMAIL` | Recommended | Admin login email |
+| `ADMIN_USERNAME` | Recommended | Admin login username |
+| `ADMIN_PASSWORD` | Recommended | Admin login password (min 8 chars) |
+| `DATABASE_URL` | No | Database URL (defaults to SQLite) |
+| `STORAGE_DIR` | No | File storage path (defaults to `/data/storage`) |
+| `PORT` | No | Server port (auto-set by Railway/Render) |
+
+### Generate JWT_SECRET
+
+```bash
+# Generate a secure 96-character hex string
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
+
+**⚠️ JWT_SECRET must be at least 32 characters!**
+
+### Deploy to Railway
+
+1. **Connect Repository**
+   - Go to [Railway](https://railway.app)
+   - Create new project → Deploy from GitHub repo
+
+2. **Set Environment Variables**
+   - Click on your service → **Variables** tab
+   - Add required variables:
+     ```
+     JWT_SECRET=<your-generated-secret-here>
+     ADMIN_EMAIL=admin@yourdomain.com
+     ADMIN_USERNAME=admin
+     ADMIN_PASSWORD=your-secure-password
+     STORAGE_DIR=/data/storage
+     DATABASE_URL=file:/data/db/prod.db
+     ```
+
+3. **Add Persistent Storage** (optional but recommended)
+   - Click **+ New** → **Volume**
+   - Mount path: `/data`
+   - This persists database and extracted files across deploys
+
+4. **Deploy**
+   - Railway auto-detects Dockerfile and builds
+   - Check logs for successful startup
+
+### Deploy to Render
+
+1. **Create Web Service**
+   - Go to [Render](https://render.com)
+   - New → Web Service → Connect repo
+   - Environment: Docker
+
+2. **Set Environment Variables**
+   - Same variables as Railway (see above)
+
+3. **Add Disk** (for persistence)
+   - Mount path: `/data`
+
+### Troubleshooting Deployment
+
+**Container keeps restarting with "JWT_SECRET required":**
+- Ensure JWT_SECRET is set in your platform's Variables/Environment section
+- Verify it's at least 32 characters long
+
+**Database errors:**
+- Check DATABASE_URL is correctly formatted
+- For SQLite: `file:/data/db/prod.db`
+- For PostgreSQL: `postgresql://user:pass@host:5432/dbname`
+
+**Files disappearing after redeploy:**
+- Add a persistent volume mounted to `/data`
+
 ## 📁 Project Structure
 
 ```
@@ -91,8 +168,9 @@ ADMIN_EMAIL=admin@example.com
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your-secure-password
 
-# JWT (generate: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")
-JWT_SECRET=your-super-secret-key-min-32-chars
+# JWT (REQUIRED - must be at least 32 characters!)
+# Generate: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+JWT_SECRET=your-super-secret-key-minimum-32-characters-long
 JWT_EXPIRES_IN=7d
 
 # Storage
