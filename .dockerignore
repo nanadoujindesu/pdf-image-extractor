@@ -1,0 +1,37 @@
+# Dependencies - will be installed fresh in Docker
+node_modules
+server/node_modules
+
+# Build outputs - will be generated in Docker
+dist
+server/dist
+
+# Environment files - should be provided at runtime
+.env
+.env.*
+!.env.example
+
+# Storage and data directories
+storage
+data
+
+# Development files
+.git
+.gitignore
+.vscode
+*.md
+!README.md
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__
+coverage
