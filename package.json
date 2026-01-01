@@ -5,10 +5,10 @@
     "type": "module",
     "scripts": {
         "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-        "dev:client": "vite",
+        "dev:client": "node ./node_modules/vite/bin/vite.js",
         "dev:server": "npm run dev --prefix server",
         "build": "npm run db:generate && npm run build:client && npm run build:server",
-        "build:client": "tsc -b --noCheck && vite build",
+        "build:client": "node ./node_modules/typescript/bin/tsc -b --noCheck && node ./node_modules/vite/bin/vite.js build",
         "build:server": "npm run build --prefix server",
         "start": "node server/dist/index.js",
         "db:generate": "npm run db:generate --prefix server",
@@ -21,8 +21,8 @@
         "docker:run": "docker run -p 3001:3001 --env-file .env pdf-image-extractor",
         "kill": "fuser -k 5000/tcp",
         "lint": "eslint .",
-        "optimize": "vite optimize",
-        "preview": "vite preview"
+        "optimize": "node ./node_modules/vite/bin/vite.js optimize",
+        "preview": "node ./node_modules/vite/bin/vite.js preview"
     },
     "dependencies": {
         "@github/spark": "^0.39.0",
@@ -88,6 +88,7 @@
         "tw-animate-css": "^1.2.4",
         "uuid": "^11.1.0",
         "vaul": "^1.1.2",
+        "vite": "^6.4.1",
         "zod": "^3.25.76"
     },
     "devDependencies": {
@@ -103,8 +104,7 @@
         "globals": "^16.0.0",
         "tailwindcss": "^4.1.11",
         "typescript": "~5.7.2",
-        "typescript-eslint": "^8.38.0",
-        "vite": "^6.4.1"
+        "typescript-eslint": "^8.38.0"
     },
     "workspaces": {
         "packages": [

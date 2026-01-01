@@ -6,6 +6,11 @@
 # ============================================
 FROM node:20-slim AS builder
 
+# Force development mode to ensure devDependencies are installed
+# This overrides any NODE_ENV=production set by Railway/CI
+ENV NODE_ENV=development
+ENV NPM_CONFIG_PRODUCTION=false
+
 # Install build dependencies for native modules (@napi-rs/canvas, argon2)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
@@ -15,25 +20,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy package files first for better caching
-COPY package*.json ./
-COPY server/package*.json ./server/
+# Copy package files first for better caching (including lockfiles for deterministic installs)
+COPY package.json package-lock.json ./
+COPY server/package.json server/package-lock.json* ./server/
 
-# Install ALL dependencies including devDependencies for build tools (vite, typescript)
-# The package-lock.json has vite incorrectly marked as peer dependency,
-# so we delete and regenerate it to ensure vite gets installed properly
-RUN rm -f package-lock.json && \
-    npm install --include=dev && \
-    npm ls vite && \
-    echo "✓ Root dependencies installed with vite"
-
-RUN cd server && npm ci --include=dev && echo "✓ Server dependencies installed"
+# Install ALL dependencies including devDependencies
+# Server is an npm workspace, so installing from root handles everything.
+# Force installation of vite explicitly as it's marked as peer dep in lockfile.
+RUN npm install --include=dev && \
+    npm install vite@^6.4.1 typescript@~5.7.2 --save-dev && \
+    ls -la node_modules/vite/bin && \
+    node ./node_modules/vite/bin/vite.js --version && \
+    echo "✓ All dependencies installed with vite"
 
 # Copy prisma schema and generate client
 COPY server/prisma ./server/prisma
 RUN cd server && npx prisma generate
 
-# Copy source files
+# Copy source files (node_modules excluded via .dockerignore)
 COPY . .
 
 # Build frontend (Vite) and server (TypeScript)
@@ -66,9 +70,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY package*.json ./
 COPY server/package*.json ./server/
 
-# Install production dependencies only
+# Install production dependencies only (server is a workspace, so single install handles all)
 RUN npm ci --omit=dev
-RUN cd server && npm ci --omit=dev
 
 # Copy prisma schema and generated client from builder
 COPY --from=builder /app/server/prisma ./server/prisma
