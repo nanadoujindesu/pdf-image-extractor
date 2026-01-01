@@ -19,9 +19,15 @@ WORKDIR /app
 COPY package*.json ./
 COPY server/package*.json ./server/
 
-# Install all dependencies (including devDependencies for build)
-RUN npm ci
-RUN cd server && npm ci
+# Install ALL dependencies including devDependencies for build tools (vite, typescript)
+# The package-lock.json has vite incorrectly marked as peer dependency,
+# so we delete and regenerate it to ensure vite gets installed properly
+RUN rm -f package-lock.json && \
+    npm install --include=dev && \
+    npm ls vite && \
+    echo "✓ Root dependencies installed with vite"
+
+RUN cd server && npm ci --include=dev && echo "✓ Server dependencies installed"
 
 # Copy prisma schema and generate client
 COPY server/prisma ./server/prisma
